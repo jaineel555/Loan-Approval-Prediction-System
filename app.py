@@ -43,4 +43,4 @@ def predict():
         return render_template('Form.html', pred='Your Loan Application may get Rejected.\nProbability of Rejection is {}'.format(output))
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000)
