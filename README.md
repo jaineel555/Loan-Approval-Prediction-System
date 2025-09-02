@@ -67,18 +67,27 @@ This project uses a **Logistic Regression model**, trained on historical loan ap
 ```bash
 git clone https://github.com/your-username/loan-approval-prediction.git
 cd loan-approval-prediction
+---
+```
 
-2️⃣ Install dependencies
+### 2️⃣ Install dependencies
+```bash
 pip install -r requirements.txt
+```
 
-3️⃣ Train the model (optional)
+### 3️⃣ Train the model (optional)
+```bash
 python MLPredict.py
+```
 
-➡️ This generates model.pkl.
+### ➡️ This generates model.pkl.
 
-4️⃣ Run Flask app
+### 4️⃣ Run Flask app
+```bash
 python app.py
+```
 
-5️⃣ Open in browser
-
+### 5️⃣ Open in browser
+```bash
 👉 http://127.0.0.1:5000/
+```
