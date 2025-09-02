@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loan Approval Prediction</title>
+    <style>
+      /* General Reset */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Poppins", sans-serif;
+        background: linear-gradient(135deg, #f0f4ff, #e6e9f2);
+        color: #333;
+        line-height: 1.6;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      /* Header */
+      .header {
+        background: linear-gradient(135deg, #6a11cb, #2575fc);
+        color: white;
+        padding: 25px 20px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+      }
+
+      .header h1 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 600;
+        letter-spacing: 1px;
+      }
+
+      /* Container */
+      .container {
+        width: 90%;
+        max-width: 600px;
+        margin: 30px auto;
+        padding: 30px;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .container:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+      }
+
+      .container h2 {
+        font-size: 26px;
+        margin-bottom: 25px;
+        color: #6a11cb;
+        text-align: center;
+        font-weight: 600;
+      }
+
+      /* Form Elements */
+      label {
+        font-size: 14px;
+        font-weight: 500;
+        margin-bottom: 8px;
+        display: block;
+        color: #555;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      input[type="text"]:focus,
+      input[type="number"]:focus,
+      select:focus {
+        border-color: #6a11cb;
+        box-shadow: 0 0 10px rgba(106, 17, 203, 0.3);
+        outline: none;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        margin-bottom: 20px;
+        background-color: #e0e0e0;
+        height: 8px;
+        border-radius: 5px;
+        outline: none;
+        transition: background-color 0.3s ease;
+      }
+
+      input[type="range"]:hover {
+        background-color: #6a11cb;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 20px;
+        height: 20px;
+        background: #6a11cb;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.3s ease, transform 0.2s ease;
+      }
+
+      input[type="range"]::-webkit-slider-thumb:hover {
+        background: #2575fc;
+        transform: scale(1.2);
+      }
+
+      /* Button */
+      .btn {
+        width: 100%;
+        padding: 14px;
+        background: linear-gradient(135deg, #6a11cb, #2575fc);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.3s ease, transform 0.2s ease;
+      }
+
+      .btn:hover {
+        background: linear-gradient(135deg, #2575fc, #6a11cb);
+        transform: translateY(-2px);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      /* Result Section */
+      .result {
+        margin-top: 25px;
+        padding: 20px;
+        font-size: 18px;
+        font-weight: 600;
+        text-align: center;
+        background: linear-gradient(135deg, #e0e7ff, #d1d8ff);
+        border-radius: 8px;
+        color: #6a11cb;
+        animation: fadeIn 0.5s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      /* Footer */
+      .footer {
+        background: linear-gradient(135deg, #333, #222);
+        color: white;
+        text-align: center;
+        padding: 20px;
+        margin-top: 30px;
+        position: sticky;
+        bottom: 0;
+        box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .footer p {
+        margin: 0;
+        font-size: 14px;
+      }
+
+      .footer a {
+        color: #6a11cb;
+        text-decoration: none;
+        transition: color 0.3s ease;
+      }
+
+      .footer a:hover {
+        color: #2575fc;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="header">
+      <h1>Loan Approval Prediction System - Prediction Using Trained ML</h1>
+      <h3>
+        "Built and designed by
+        <a
+          href="https://www.instagram.com/jaineel_purani__555/?utm_source=ig_web_button_share_sheet"
+          class="light_text"
+          style="color: red"
+          ;
+          >Jaineel Purani</a
+        >."
+      </h3>
+    </div>
+
+    <div class="container">
+      <h2>Loan Approval Prediction</h2>
+      <form id="loanForm" action="/predict" method="POST">
+        <label for="dependents">No. of dependents:</label>
+        <input type="number" id="dependents" name="dependents" required />
+        <input type="range" id="dependentsSlider" min="0" max="7" step="1" />
+
+        <label for="education">Education:</label>
+        <select id="education" name="education">
+          <option value="graduate">Graduate</option>
+          <option value="non-graduate">Non-Graduate</option>
+        </select>
+
+        <label for="employment">Employment Status:</label>
+        <select id="employment" name="employment">
+          <option value="self-employed">Self-employed</option>
+          <option value="employed">Employed</option>
+        </select>
+
+        <label for="income">Applicant's Income in $:</label>
+        <input type="number" id="income" name="income" required />
+        <input
+          type="range"
+          id="incomeSlider"
+          min="100"
+          max="100000"
+          step="1000"
+        />
+
+        <label for="loanAmount">Loan Amount in $:</label>
+        <input type="number" id="loanAmount" name="loanAmount" required />
+        <input
+          type="range"
+          id="loanAmountSlider"
+          min="500"
+          max="500000"
+          step="1000"
+        />
+
+        <label for="loanTerm">Loan Term (in years):</label>
+        <input type="number" id="loanTerm" name="loanTerm" required />
+        <input type="range" id="loanTermSlider" min="1" max="25" step="1" />
+
+        <label for="creditScore">Credit Score:</label>
+        <input type="number" id="creditScore" name="creditScore" required />
+        <input
+          type="range"
+          id="creditScoreSlider"
+          min="300"
+          max="850"
+          step="10"
+        />
+
+        <label for="residentialAssets">Residential Assets Value in $:</label>
+        <input
+          type="number"
+          id="residentialAssets"
+          name="residentialAssets"
+          required
+        />
+        <input
+          type="range"
+          id="residentialAssetsSlider"
+          min="0"
+          max="1000000"
+          step="10000"
+        />
+
+        <label for="bankAssets">Bank Assets Value in $:</label>
+        <input type="number" id="bankAssets" name="bankAssets" required />
+        <input
+          type="range"
+          id="bankAssetsSlider"
+          min="0"
+          max="1000000"
+          step="10000"
+        />
+
+        <button type="submit" id="submitButton" class="btn">
+          Predict Loan Approval
+        </button>
+      </form>
+
+      <div class="result" id="result">{{ pred }}</div>
+    </div>
+
+    <script>
+      function synchronizeInputs(inputId, sliderId) {
+        const input = document.getElementById(inputId);
+        const slider = document.getElementById(sliderId);
+
+        input.addEventListener("input", () => (slider.value = input.value));
+        slider.addEventListener("input", () => (input.value = slider.value));
+      }
+
+      synchronizeInputs("dependents", "dependentsSlider");
+      synchronizeInputs("income", "incomeSlider");
+      synchronizeInputs("loanAmount", "loanAmountSlider");
+      synchronizeInputs("loanTerm", "loanTermSlider");
+      synchronizeInputs("creditScore", "creditScoreSlider");
+      synchronizeInputs("residentialAssets", "residentialAssetsSlider");
+      synchronizeInputs("bankAssets", "bankAssetsSlider");
+    </script>
+
+    <div class="footer">
+      <p>
+        &copy; 2025 Loan Prediction Inc. |
+        <a href="https://www.linkedin.com/in/jaineel-purani-9a128120b/"
+          >Connect</a
+        >
+      </p>
+    </div>
+  </body>
+</html>
