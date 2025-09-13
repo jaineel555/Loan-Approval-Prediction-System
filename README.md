@@ -8,7 +8,7 @@ A production‑ready Machine Learning + Flask web app that predicts whether a lo
 
 ## 📌 Table of Contents
 - [Overview](#overview) [attached_file:2]
-- [Features](#features) [attached_file:2]
+- [Features](#🚀Features) [attached_file:2]
 - [Architecture](#architecture) [attached_file:2]
 - [Tech Stack](#tech-stack) [attached_file:2]
 - [Quick Start](#quick-start) [attached_file:2]
