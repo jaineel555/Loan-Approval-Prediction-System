@@ -1,403 +1,275 @@
+# MLPredict.py - Improved Random Forest with Better Probability Calibration
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report
-from sklearn.preprocessing import StandardScaler, LabelEncoder
 import pickle
-import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
-warnings.filterwarnings('ignore')
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import (
+    accuracy_score, classification_report, confusion_matrix,
+    roc_auc_score, f1_score, precision_score, recall_score
+)
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.linear_model import LogisticRegression
 
-print("="*60)
-print("LARGE DATASET ANALYSIS (3000+ rows)")
-print("="*60)
+warnings.filterwarnings("ignore", category=UserWarning)
 
-# Load the dataset
-print("Loading dataset...")
-data = pd.read_csv('Loan_Approval_Prediction_Dataset.csv')
-print(f"Dataset loaded: {data.shape}")
+# ---------- CONFIG ----------
+CSV_PATH = "Loan_Approval_Prediction_Dataset.csv"
+MODEL_PATH = "model.pkl"
+RANDOM_STATE = 42
+TEST_SIZE = 0.30
+# ----------------------------
 
-# Display basic info
-print(f"\nDataset Overview:")
-print(f"Rows: {data.shape[0]}")
-print(f"Columns: {data.shape[1]}")
-print(f"Column names: {list(data.columns)}")
+def load_and_prepare(csv_path):
+    """Load CSV and prepare X, y and feature names."""
+    df = pd.read_csv(csv_path)
+    arr = np.array(df)
 
-print(f"\nFirst 3 rows:")
-print(data.head(3))
+    # Extract features and target
+    X = arr[:, 1:10].astype(float)
+    y = arr[:, 10].astype(int)
 
-print(f"\nLast 3 rows:")
-print(data.tail(3))
+    feature_names = [
+        "no_of_dependents",
+        "education_binary", 
+        "self_employed_binary",
+        "income_annum",
+        "loan_amount",
+        "loan_term",
+        "cibil_score",
+        "residential_assets_value",
+        "bank_asset_value"
+    ]
 
-print(f"\nData types:")
-for i, (col, dtype) in enumerate(zip(data.columns, data.dtypes)):
-    print(f"  {i:2d}. {col:25s} - {dtype}")
+    return X, y, feature_names
 
-# Check for missing values
-print(f"\nMissing values per column:")
-missing_vals = data.isnull().sum()
-for col, missing in missing_vals.items():
-    if missing > 0:
-        print(f"  {col}: {missing} missing ({missing/len(data)*100:.1f}%)")
+def create_optimized_random_forest():
+    """Create a Random Forest optimized for smooth probability outputs."""
+    return RandomForestClassifier(
+        n_estimators=500,          # More trees for smoother probabilities
+        max_depth=15,              # Prevent overfitting but allow complexity
+        min_samples_split=20,      # Require more samples to split (smoother)
+        min_samples_leaf=10,       # Require more samples per leaf (smoother)
+        max_features='sqrt',       # Use sqrt of features for diversity
+        bootstrap=True,            # Use bootstrap sampling
+        oob_score=True,            # Out-of-bag scoring
+        random_state=RANDOM_STATE,
+        n_jobs=-1,
+        class_weight='balanced'    # Handle class imbalance
+    )
 
-if missing_vals.sum() == 0:
-    print("  No missing values found")
-
-# Analyze each column to understand the data structure
-print(f"\n" + "="*50)
-print("COLUMN ANALYSIS")
-print("="*50)
-
-for i, col in enumerate(data.columns):
-    print(f"\nColumn {i}: '{col}'")
-    unique_vals = data[col].unique()
-    n_unique = len(unique_vals)
+def train_multiple_models_and_select_best(X, y, feature_names, model_path):
+    """Train multiple models and select the one with best probability distribution."""
     
-    print(f"  Unique values: {n_unique}")
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=TEST_SIZE, random_state=RANDOM_STATE, stratify=y
+    )
     
-    if n_unique <= 10:  # Show all values if few unique values
-        print(f"  Values: {unique_vals}")
-        if n_unique == 2:
-            print(f" BINARY COLUMN (potential target or categorical feature)")
-    else:  # Show range for continuous variables
-        if pd.api.types.is_numeric_dtype(data[col]):
-            print(f"  Range: {data[col].min()} to {data[col].max()}")
-            print(f"  Mean: {data[col].mean():.2f}, Std: {data[col].std():.2f}")
-        else:
-            print(f"  Sample values: {unique_vals[:5]}...")
+    print(f"Training set: {X_train.shape}, Test set: {X_test.shape}")
+    print(f"Class distribution - Training: {np.bincount(y_train)}")
+    print(f"Class distribution - Test: {np.bincount(y_test)}")
     
-    # Check if this could be the target variable
-    if n_unique == 2:
-        value_counts = data[col].value_counts()
-        print(f"  Distribution: {dict(value_counts)}")
-        
-        # Calculate balance
-        balance = min(value_counts) / max(value_counts)
-        print(f"  Balance ratio: {balance:.3f} {'(Good)' if balance > 0.3 else '(Imbalanced)'}")
-
-# Try to automatically identify the target column
-print(f"\n" + "="*50)
-print("TARGET VARIABLE IDENTIFICATION")
-print("="*50)
-
-# Look for common target column patterns
-potential_targets = []
-
-for i, col in enumerate(data.columns):
-    col_lower = col.lower()
-    unique_vals = len(data[col].unique())
+    models_to_try = []
     
-    # Check for binary columns with loan-related names
-    if unique_vals == 2:
-        if any(keyword in col_lower for keyword in ['loan', 'approval', 'approved', 'status', 'result', 'target', 'class', 'label']):
-            potential_targets.append((i, col, 'Name suggests target'))
-        elif i == len(data.columns) - 1:  # Last column
-            potential_targets.append((i, col, 'Last column (common target position)'))
-        elif i == 10:  # Column K (index 10) as mentioned in original code
-            potential_targets.append((i, col, 'Column K (as in original code)'))
-
-print(f"Potential target columns found:")
-if potential_targets:
-    for idx, col, reason in potential_targets:
-        values = data[col].unique()
-        counts = data[col].value_counts()
-        print(f"  Column {idx}: '{col}' - {reason}")
-        print(f"    Values: {values}")
-        print(f"    Distribution: {dict(counts)}")
-else:
-    print("  No obvious target column found. Checking last column and column 10...")
+    # Model 1: Optimized Random Forest with Platt Scaling
+    print("\n=== Training Model 1: Optimized Random Forest + Platt Scaling ===")
+    rf_optimized = create_optimized_random_forest()
+    rf_pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf", rf_optimized)
+    ])
     
-    # Check last column
-    last_col_idx = len(data.columns) - 1
-    last_col = data.columns[last_col_idx]
-    last_unique = len(data[last_col].unique())
-    print(f"  Last column ({last_col_idx}): '{last_col}' has {last_unique} unique values")
-    if last_unique == 2:
-        print(f"    Distribution: {dict(data[last_col].value_counts())}")
-        potential_targets.append((last_col_idx, last_col, 'Last column with 2 values'))
+    # Use Platt scaling (sigmoid) which often works better for Random Forest
+    rf_calibrated = CalibratedClassifierCV(
+        estimator=rf_pipeline, 
+        cv=5, 
+        method="sigmoid"  # Platt scaling
+    )
     
-    # Check column 10 if it exists
-    if len(data.columns) > 10:
-        col_10 = data.columns[10]
-        col_10_unique = len(data[col_10].unique())
-        print(f"  Column 10: '{col_10}' has {col_10_unique} unique values")
-        if col_10_unique == 2:
-            print(f"    Distribution: {dict(data[col_10].value_counts())}")
-            potential_targets.append((10, col_10, 'Column 10 with 2 values'))
-
-# Select the best target column
-if not potential_targets:
-    print("❌ No suitable binary target column found!")
-    print("\nAll columns and their unique value counts:")
-    for i, col in enumerate(data.columns):
-        print(f"  {i}: {col} -> {len(data[col].unique())} unique values")
-    exit()
-
-# Use the first potential target (prioritize by order of likelihood)
-target_idx, target_col, target_reason = potential_targets[0]
-print(f"\nUsing column {target_idx} ('{target_col}') as target")
-print(f"  Reason: {target_reason}")
-
-# Prepare features and target
-print(f"\n" + "="*50)
-print("DATA PREPARATION")
-print("="*50)
-
-# Use all columns except the target (and possibly ID column if first column looks like ID)
-feature_cols = list(range(len(data.columns)))
-feature_cols.remove(target_idx)
-
-# Check if first column might be an ID (many unique values, sequential, etc.)
-first_col = data.columns[0]
-first_col_unique = len(data[first_col].unique())
-if first_col_unique > len(data) * 0.8:  # More than 80% unique values
-    print(f"Removing first column '{first_col}' (appears to be ID with {first_col_unique} unique values)")
-    if 0 in feature_cols:
-        feature_cols.remove(0)
-
-print(f"Using columns {feature_cols} as features")
-print(f"Using column {target_idx} as target")
-
-# Extract features and target
-X_raw = data.iloc[:, feature_cols]
-y_raw = data.iloc[:, target_idx]
-
-print(f"Features shape: {X_raw.shape}")
-print(f"Target shape: {y_raw.shape}")
-
-# Process features
-print(f"\nProcessing features...")
-X_processed = X_raw.copy()
-
-# Handle categorical variables
-categorical_cols = []
-numeric_cols = []
-
-for col in X_processed.columns:
-    if pd.api.types.is_numeric_dtype(X_processed[col]):
-        numeric_cols.append(col)
+    rf_calibrated.fit(X_train, y_train)
+    rf_pred = rf_calibrated.predict(X_test)
+    rf_proba = rf_calibrated.predict_proba(X_test)[:, 1]
+    
+    rf_metrics = {
+        'name': 'Random Forest + Platt Scaling',
+        'model': rf_calibrated,
+        'accuracy': accuracy_score(y_test, rf_pred),
+        'roc_auc': roc_auc_score(y_test, rf_proba),
+        'f1': f1_score(y_test, rf_pred),
+        'prob_std': rf_proba.std(),
+        'unique_probs': len(np.unique(np.round(rf_proba, 4))),
+        'prob_range': (rf_proba.min(), rf_proba.max())
+    }
+    models_to_try.append(rf_metrics)
+    
+    # Model 2: Random Forest with Isotonic Calibration
+    print("\n=== Training Model 2: Random Forest + Isotonic Calibration ===")
+    rf_isotonic = CalibratedClassifierCV(
+        estimator=rf_pipeline, 
+        cv=5, 
+        method="isotonic"  # Isotonic regression
+    )
+    
+    rf_isotonic.fit(X_train, y_train)
+    iso_pred = rf_isotonic.predict(X_test)
+    iso_proba = rf_isotonic.predict_proba(X_test)[:, 1]
+    
+    iso_metrics = {
+        'name': 'Random Forest + Isotonic Calibration',
+        'model': rf_isotonic,
+        'accuracy': accuracy_score(y_test, iso_pred),
+        'roc_auc': roc_auc_score(y_test, iso_proba),
+        'f1': f1_score(y_test, iso_pred),
+        'prob_std': iso_proba.std(),
+        'unique_probs': len(np.unique(np.round(iso_proba, 4))),
+        'prob_range': (iso_proba.min(), iso_proba.max())
+    }
+    models_to_try.append(iso_metrics)
+    
+    # Model 3: Logistic Regression (for comparison)
+    print("\n=== Training Model 3: Logistic Regression (Reference) ===")
+    lr_pipeline = Pipeline([
+        ("scaler", StandardScaler()),
+        ("clf", LogisticRegression(
+            random_state=RANDOM_STATE, 
+            max_iter=2000,
+            class_weight='balanced'
+        ))
+    ])
+    
+    lr_pipeline.fit(X_train, y_train)
+    lr_pred = lr_pipeline.predict(X_test)
+    lr_proba = lr_pipeline.predict_proba(X_test)[:, 1]
+    
+    lr_metrics = {
+        'name': 'Logistic Regression',
+        'model': lr_pipeline,
+        'accuracy': accuracy_score(y_test, lr_pred),
+        'roc_auc': roc_auc_score(y_test, lr_proba),
+        'f1': f1_score(y_test, lr_pred),
+        'prob_std': lr_proba.std(),
+        'unique_probs': len(np.unique(np.round(lr_proba, 4))),
+        'prob_range': (lr_proba.min(), lr_proba.max())
+    }
+    models_to_try.append(lr_metrics)
+    
+    # Print comparison
+    print("\n" + "="*80)
+    print("MODEL COMPARISON")
+    print("="*80)
+    print(f"{'Model':<35} {'Accuracy':<10} {'ROC-AUC':<10} {'F1':<10} {'Prob_Std':<10} {'Unique_Probs':<12}")
+    print("-" * 80)
+    
+    for m in models_to_try:
+        print(f"{m['name']:<35} {m['accuracy']:<10.4f} {m['roc_auc']:<10.4f} {m['f1']:<10.4f} {m['prob_std']:<10.4f} {m['unique_probs']:<12}")
+        print(f"{'  Probability range:':<35} [{m['prob_range'][0]:.4f}, {m['prob_range'][1]:.4f}]")
+        print()
+    
+    # Select best model based on combination of performance and probability distribution
+    # Priority: ROC-AUC > Probability Standard Deviation > Unique Probabilities
+    def model_score(m):
+        return m['roc_auc'] * 0.6 + (m['prob_std'] * 0.3) + (min(m['unique_probs'], 500) / 500.0 * 0.1)
+    
+    best_model = max(models_to_try, key=model_score)
+    
+    print(f"SELECTED MODEL: {best_model['name']}")
+    print(f"Selection criteria score: {model_score(best_model):.4f}")
+    print(f"This model has:")
+    print(f"  - ROC-AUC: {best_model['roc_auc']:.4f}")
+    print(f"  - Probability Standard Deviation: {best_model['prob_std']:.4f}")
+    print(f"  - Unique Probabilities: {best_model['unique_probs']}")
+    print(f"  - Probability Range: [{best_model['prob_range'][0]:.4f}, {best_model['prob_range'][1]:.4f}]")
+    
+    # Test with diverse samples to verify probability distribution
+    print(f"\n" + "="*50)
+    print("TESTING PROBABILITY DISTRIBUTION")
+    print("="*50)
+    
+    # Create test samples across different ranges
+    feature_ranges = {
+        'dependents': (0, 5),
+        'income': (200000, 9900000),
+        'loan_amount': (300000, 39500000),
+        'credit_score': (300, 900),
+        'residential_assets': (0, 29100000),
+        'bank_assets': (0, 14700000)
+    }
+    
+    test_samples = [
+        # Very bad profile
+        [5, 0, 0, 200000, 20000000, 6, 300, 100000, 50000],
+        # Bad profile  
+        [4, 0, 0, 500000, 15000000, 8, 400, 500000, 200000],
+        # Below average
+        [3, 1, 0, 1500000, 10000000, 12, 500, 2000000, 1000000],
+        # Average
+        [2, 1, 1, 3000000, 8000000, 16, 600, 5000000, 3000000],
+        # Above average
+        [1, 1, 1, 6000000, 5000000, 18, 700, 10000000, 6000000],
+        # Good profile
+        [1, 1, 0, 8000000, 3000000, 20, 800, 15000000, 8000000],
+        # Very good profile
+        [0, 1, 1, 9900000, 1000000, 20, 900, 25000000, 12000000]
+    ]
+    
+    print("Testing with 7 diverse profiles:")
+    print("Profile descriptions: Very Bad -> Bad -> Below Avg -> Average -> Above Avg -> Good -> Very Good")
+    
+    probabilities = []
+    for i, sample in enumerate(test_samples):
+        sample_array = np.array(sample).reshape(1, -1)
+        prob = best_model['model'].predict_proba(sample_array)[0][1]
+        probabilities.append(prob * 100)
+        print(f"Profile {i+1}: {prob*100:5.1f}% approval probability")
+    
+    # Check if we have good distribution
+    prob_std = np.std(probabilities)
+    prob_range = max(probabilities) - min(probabilities)
+    
+    print(f"\nProbability Distribution Analysis:")
+    print(f"  Standard Deviation: {prob_std:.1f}%")
+    print(f"  Range: {prob_range:.1f}%")
+    print(f"  Min: {min(probabilities):.1f}%, Max: {max(probabilities):.1f}%")
+    
+    if prob_std < 5:
+        print("  WARNING: Low variation in probabilities!")
+    elif prob_range < 30:
+        print("  WARNING: Limited probability range!")
     else:
-        categorical_cols.append(col)
-
-print(f"Numeric columns: {numeric_cols}")
-print(f"Categorical columns: {categorical_cols}")
-
-# Process categorical columns
-label_encoders = {}
-for col in categorical_cols:
-    le = LabelEncoder()
-    X_processed[col] = le.fit_transform(X_processed[col].astype(str))
-    label_encoders[col] = le
-    print(f"  Encoded '{col}': {len(le.classes_)} categories")
-
-# Handle missing values in numeric columns
-for col in numeric_cols:
-    if X_processed[col].isnull().sum() > 0:
-        median_val = X_processed[col].median()
-        X_processed[col].fillna(median_val, inplace=True)
-        print(f"  Filled missing values in '{col}' with median: {median_val}")
-
-# Process target variable
-y_processed = y_raw.copy()
-target_unique = y_processed.unique()
-
-if len(target_unique) == 2:
-    # Ensure target is 0/1
-    if not all(val in [0, 1] for val in target_unique):
-        le_target = LabelEncoder()
-        y_processed = le_target.fit_transform(y_processed)
-        target_mapping = dict(zip(le_target.classes_, le_target.transform(le_target.classes_)))
-        print(f"Target mapping: {target_mapping}")
-    else:
-        target_mapping = None
-
-print(f"Final target distribution:")
-target_dist = pd.Series(y_processed).value_counts().sort_index()
-print(target_dist)
-for val, count in target_dist.items():
-    print(f"  Class {val}: {count} samples ({count/len(y_processed)*100:.1f}%)")
-
-# Convert to numpy
-X = X_processed.values.astype(float)
-y = y_processed.values
-
-# Train and evaluate models
-print(f"\n" + "="*50)
-print("MODEL TRAINING AND EVALUATION")
-print("="*50)
-
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-print(f"Train set: {X_train.shape}, Test set: {X_test.shape}")
-
-# Model 1: Standard Logistic Regression
-print(f"\n1. Standard Logistic Regression:")
-lr1 = LogisticRegression(random_state=42, max_iter=2000)
-lr1.fit(X_train, y_train)
-
-y_pred1 = lr1.predict(X_test)
-y_prob1 = lr1.predict_proba(X_test)
-
-acc1 = accuracy_score(y_test, y_pred1)
-prob_stats1 = {
-    'min': y_prob1[:, 1].min(),
-    'max': y_prob1[:, 1].max(),
-    'mean': y_prob1[:, 1].mean(),
-    'std': y_prob1[:, 1].std(),
-    'unique': len(np.unique(np.round(y_prob1[:, 1], 4)))
-}
-
-print(f"  Accuracy: {acc1:.4f}")
-print(f"  Probability stats: min={prob_stats1['min']:.4f}, max={prob_stats1['max']:.4f}")
-print(f"  Mean={prob_stats1['mean']:.4f}, Std={prob_stats1['std']:.4f}")
-print(f"  Unique probabilities: {prob_stats1['unique']}")
-
-# Model 2: Scaled Logistic Regression
-print(f"\n2. Scaled Logistic Regression:")
-scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train)
-X_test_scaled = scaler.transform(X_test)
-
-lr2 = LogisticRegression(random_state=42, max_iter=2000)
-lr2.fit(X_train_scaled, y_train)
-
-y_pred2 = lr2.predict(X_test_scaled)
-y_prob2 = lr2.predict_proba(X_test_scaled)
-
-acc2 = accuracy_score(y_test, y_pred2)
-prob_stats2 = {
-    'min': y_prob2[:, 1].min(),
-    'max': y_prob2[:, 1].max(),
-    'mean': y_prob2[:, 1].mean(),
-    'std': y_prob2[:, 1].std(),
-    'unique': len(np.unique(np.round(y_prob2[:, 1], 4)))
-}
-
-print(f"  Accuracy: {acc2:.4f}")
-print(f"  Probability stats: min={prob_stats2['min']:.4f}, max={prob_stats2['max']:.4f}")
-print(f"  Mean={prob_stats2['mean']:.4f}, Std={prob_stats2['std']:.4f}")
-print(f"  Unique probabilities: {prob_stats2['unique']}")
-
-# Model 3: Regularized Logistic Regression
-print(f"\n3. L2 Regularized Logistic Regression:")
-lr3 = LogisticRegression(random_state=42, max_iter=2000, C=0.1)  # Stronger regularization
-lr3.fit(X_train_scaled, y_train)
-
-y_pred3 = lr3.predict(X_test_scaled)
-y_prob3 = lr3.predict_proba(X_test_scaled)
-
-acc3 = accuracy_score(y_test, y_pred3)
-prob_stats3 = {
-    'min': y_prob3[:, 1].min(),
-    'max': y_prob3[:, 1].max(),
-    'mean': y_prob3[:, 1].mean(),
-    'std': y_prob3[:, 1].std(),
-    'unique': len(np.unique(np.round(y_prob3[:, 1], 4)))
-}
-
-print(f"  Accuracy: {acc3:.4f}")
-print(f"  Probability stats: min={prob_stats3['min']:.4f}, max={prob_stats3['max']:.4f}")
-print(f"  Mean={prob_stats3['mean']:.4f}, Std={prob_stats3['std']:.4f}")
-print(f"  Unique probabilities: {prob_stats3['unique']}")
-
-# Choose best model based on probability variation
-models = [
-    ('Standard LR', lr1, None, prob_stats1['std'], acc1),
-    ('Scaled LR', lr2, scaler, prob_stats2['std'], acc2),
-    ('Regularized LR', lr3, scaler, prob_stats3['std'], acc3)
-]
-
-best_model = max(models, key=lambda x: x[3])  # Choose highest std
-model_name, model, model_scaler, model_std, model_acc = best_model
-
-print(f"\nBest model: {model_name}")
-print(f"  Probability variation (std): {model_std:.4f}")
-print(f"  Accuracy: {model_acc:.4f}")
-
-# Save the model
-model_data = {
-    'model': model,
-    'scaler': model_scaler,
-    'use_scaling': model_scaler is not None,
-    'feature_columns': list(X_processed.columns),
-    'target_column': target_col,
-    'target_mapping': target_mapping if 'target_mapping' in locals() else None,
-    'label_encoders': label_encoders
-}
-
-pickle.dump(model_data, open('model.pkl', 'wb'))
-print(f"Model saved to model.pkl")
-
-# Test with diverse samples
-print(f"\n" + "="*50)
-print("TESTING WITH SAMPLE DATA")
-print("="*50)
-
-# Create test samples that vary across the feature space
-print("Creating diverse test samples...")
-
-# Get feature ranges
-feature_mins = X.min(axis=0)
-feature_maxs = X.max(axis=0)
-feature_means = X.mean(axis=0)
-
-test_samples = []
-
-# Sample 1: All minimum values (worst case)
-test_samples.append(feature_mins)
-
-# Sample 2: All maximum values (best case)  
-test_samples.append(feature_maxs)
-
-# Sample 3: All mean values (average case)
-test_samples.append(feature_means)
-
-# Sample 4: Mixed values (25th percentile)
-test_samples.append(np.percentile(X, 25, axis=0))
-
-# Sample 5: Mixed values (75th percentile)
-test_samples.append(np.percentile(X, 75, axis=0))
-
-# Test each sample
-print(f"Testing {len(test_samples)} diverse samples:")
-
-for i, sample in enumerate(test_samples, 1):
-    sample_2d = sample.reshape(1, -1)
+        print("  GOOD: Model shows good probability variation")
     
-    if model_scaler:
-        sample_2d = model_scaler.transform(sample_2d)
+    # Save the best model
+    model_data = {
+        "model": best_model['model'],
+        "feature_columns": feature_names,
+        "use_scaling": True,
+        "meta": {
+            "classifier_type": best_model['name'],
+            "random_state": RANDOM_STATE,
+            "performance": {
+                "accuracy": best_model['accuracy'],
+                "roc_auc": best_model['roc_auc'],
+                "f1_score": best_model['f1'],
+                "prob_std": best_model['prob_std'],
+                "unique_probs": best_model['unique_probs']
+            }
+        }
+    }
     
-    prob = model.predict_proba(sample_2d)
-    approval_prob = prob[0][1] * 100
+    with open(model_path, "wb") as f:
+        pickle.dump(model_data, f)
     
-    print(f"Sample {i}: {approval_prob:.1f}% approval probability")
+    print(f"\nModel saved to: {model_path}")
+    return best_model
 
-# Final diagnosis
-print(f"\n" + "="*60)
-print("FINAL DIAGNOSIS")
-print("="*60)
-
-if model_std < 0.01:
-    print("ERROR: Very low probability variation!")
-    print("   Your model is likely overfitted or the data has issues.")
-    print("   This explains why you're getting 100% predictions.")
-    print("\n   Possible solutions:")
-    print("   1. Check if target variable is balanced")
-    print("   2. Try different regularization parameters")
-    print("   3. Remove highly correlated features")
-    print("   4. Check for data leakage")
-elif prob_stats2['unique'] < 10:
-    print("LOW VARIATION: Model produces few unique probabilities")
-    print("   This might cause limited prediction ranges.")
-else:
-    print("GOOD: Model shows reasonable probability variation")
-    print("   The 100% issue might be in the Flask app or input processing.")
-
-print(f"\nModel Performance Summary:")
-print(f"  Probability range: [{min(prob_stats1['min'], prob_stats2['min'], prob_stats3['min']):.4f}, {max(prob_stats1['max'], prob_stats2['max'], prob_stats3['max']):.4f}]")
-print(f"  Best model std: {model_std:.4f}")
-print(f"  Dataset size: {len(data)} rows")
-print(f"  Features used: {X.shape[1]}")
-print(f"  Target balance: {target_dist.values}")
+if __name__ == "__main__":
+    X, y, feature_names = load_and_prepare(CSV_PATH)
+    print(f"Dataset shape: {X.shape}, {y.shape}")
+    print(f"Target distribution: {np.bincount(y)}")
+    
+    best_model = train_multiple_models_and_select_best(X, y, feature_names, MODEL_PATH)
+    print(f"\nTraining complete! Best model: {best_model['name']}")
