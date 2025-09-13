@@ -2,8 +2,14 @@
 
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)](https://www.python.org/)  
 [![Flask](https://img.shields.io/badge/Flask-3.1-lightgrey)](https://flask.palletsprojects.com/)  
-[![scikit-learn](https://img.shields.io/badge/Scikit--Learn-1.6-orange)](https://scikit-learn.org/)  
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)  
+[![scikit-learn](https://img.shields.io/badge/Scikit--Learn-1.6-orange)](https://scikit-learn.org/) 
+[![NumPy](https://img.shields.io/badge/NumPy-1.25-blueviolet)](https://numpy.org/)  
+[![Pandas](https://img.shields.io/badge/Pandas-2.1-lightblue)](https://pandas.pydata.org/)  
+[![Matplotlib](https://img.shields.io/badge/Matplotlib-3.8-red)](https://matplotlib.org/)  
+[![Seaborn](https://img.shields.io/badge/Seaborn-0.12-blue)](https://seaborn.pydata.org/)  
+[![Pickle](https://img.shields.io/badge/Pickle-Built-in-lightgrey)](https://docs.python.org/3/library/pickle.html)  
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 
 A **Machine Learning + Flask web app** that predicts whether a loan application will be **Approved ✅** or **Rejected ❌**.  
 This project uses a **Logistic Regression model**, trained on historical loan applicant data, and provides **real-time predictions** with probability analysis, financial ratios, risk factors, and recommendations.  
