@@ -15,8 +15,8 @@ This project uses a **Logistic Regression model**, trained on historical loan ap
 - [📊 Workflow](#-workflow)  
 - [⚙️ Tech Stack](#️-tech-stack)  
 - [🛠️ Installation & Usage](#️-installation--usage)  
-- [📈 Example Output](#-example--output)  
-- [📌 Future Enhancements](#-future--enhancements)  
+- [📈 Example Output](#-Example-Output)  
+- [📌 Future Enhancements](#-Future-Enhancements).  
 - [🤝 Contributing](#-contributing)  
 - [👨‍💻 Author](#-author)  
 - [📜 License](#-license)  
