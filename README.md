@@ -7,7 +7,6 @@
 [![Pandas](https://img.shields.io/badge/Pandas-2.1-lightblue)](https://pandas.pydata.org/)  
 [![Matplotlib](https://img.shields.io/badge/Matplotlib-3.8-red)](https://matplotlib.org/)  
 [![Seaborn](https://img.shields.io/badge/Seaborn-0.12-blue)](https://seaborn.pydata.org/)  
-[![Pickle](https://img.shields.io/badge/Pickle-Built-in-lightgrey)](https://docs.python.org/3/library/pickle.html)  
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 
