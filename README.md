@@ -14,8 +14,7 @@ This project uses a **Logistic Regression model**, trained on historical loan ap
 - [🚀 Features](#-features)  
 - [📊 Workflow](#-workflow)  
 - [⚙️ Tech Stack](#️-tech-stack)  
-- [🛠️ Installation & Usage](#️-installation--usage)  
-- [📈 Example Output](#-Example-Output)  
+- [🛠️ Installation & Usage](#️-installation--usage)   
 - [📌 Future Enhancements](#-Future-Enhancements).  
 - [🤝 Contributing](#-contributing)  
 - [👨‍💻 Author](#-author)  
@@ -97,16 +96,6 @@ python app.py
 ```bash
 👉 http://127.0.0.1:5000/
 ```
-
----
-
-## 📈 Example Output  
-
-### 🔹 Loan Application Form  
-![Form Screenshot](docs/form_preview.png)  
-
-### 🔹 Prediction Result  
-![Result Screenshot](docs/result_preview.png)  
 
 ---
 
